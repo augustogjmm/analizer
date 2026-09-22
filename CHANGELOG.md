@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3 — 2026-09-22
+
+- Mejora de contraste y legibilidad de textos secundarios sobre fondo negro.
+- Etiquetas, ayudas, metadatos, cabeceras, contenido de tablas, pie y escala de precios usan grises más claros.
+- Leve aumento de tamaño en microtextos críticos sin modificar la lógica del motor ni el layout general.
+
 ## 1.1.0 — 2026-09-22
 
 - Reemplazo del combo de tres pares por campo libre de símbolo.

@@ -9,8 +9,8 @@
   color-scheme:dark;
   --void:#000000;
   --white:#ffffff;
-  --ash:#9a9a9a;
-  --silver:#bdbdbd;
+  --ash:#b8b8b8;
+  --silver:#d2d2d2;
   --iris:#8052ff;
   --amber:#ffb829;
   --green:#36d58a;
@@ -132,8 +132,8 @@ input:focus,select:focus{background:#101010;box-shadow:inset 0 0 0 1px #383838}
 .field-hint{
   min-height:16px;
   padding-left:18px;
-  color:#676767;
-  font-size:10px;
+  color:#989898;
+  font-size:11px;
   line-height:1.4;
 }
 button{
@@ -158,13 +158,13 @@ button:disabled{cursor:default;opacity:.5;transform:none}
   gap:18px;
   flex-wrap:wrap;
   padding:2px 0 14px;
-  color:#666;
-  font-size:10px;
+  color:#9a9a9a;
+  font-size:11px;
   line-height:1.5;
   letter-spacing:.035em;
   text-transform:uppercase;
 }
-.meta b{color:#a7a7a7;font-weight:600}
+.meta b{color:#d0d0d0;font-weight:600}
 .meta .accent{color:var(--amber)}
 .chartbox{
   position:relative;
@@ -212,19 +212,19 @@ canvas{display:block;width:100%;height:100%}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th,td{padding:12px 0;text-align:left;white-space:nowrap}
 th{
-  color:#666;
-  font-size:10px;
+  color:#989898;
+  font-size:11px;
   font-weight:600;
   letter-spacing:.08em;
   text-transform:uppercase;
 }
-td{color:#bdbdbd}
+td{color:#d2d2d2}
 tbody tr+tr td{border-top:1px solid #101010}
 .bull{color:#65e7a5}.bear{color:#ff858d}.muted{color:#777}
 footer{
   padding:36px 0 10px;
-  color:#4f4f4f;
-  font-size:10px;
+  color:#7f7f7f;
+  font-size:11px;
   letter-spacing:.04em;
 }
 .hidden-progress{display:none}
@@ -288,7 +288,7 @@ footer{
 <section class="tbl"><h2 class="bear">Entradas Short</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bearRows"></tbody></table></section>
 </div>
 
-<footer>Analizer v1.1.2</footer>
+<footer>Analizer v1.1.3</footer>
 </main>
 <script>
 (function(){
@@ -393,7 +393,7 @@ function draw(){
  if(!S.candles.length){x.fillStyle="#8b98ab";x.fillText("Sin datos",20,28);return}
  var m=model(rect.width,rect.height),p=m.p;
  var grids=7,gs=(m.mx-m.mn)/grids;
- x.font="11px Inter,system-ui";for(var g=0;g<=grids;g++){var price=m.mn+g*gs,y=m.y(price);x.strokeStyle="#171717";x.lineWidth=1;x.beginPath();x.moveTo(p.l,y);x.lineTo(p.r,y);x.stroke();x.fillStyle="#6f6f6f";x.fillText(fmt(price),p.r+9,y+3)}
+ x.font="11px Inter,system-ui";for(var g=0;g<=grids;g++){var price=m.mn+g*gs,y=m.y(price);x.strokeStyle="#171717";x.lineWidth=1;x.beginPath();x.moveTo(p.l,y);x.lineTo(p.r,y);x.stroke();x.fillStyle="#9a9a9a";x.fillText(fmt(price),p.r+9,y+3)}
  var bw=Math.max(1,Math.min(9,m.step*.68));
  m.vis.forEach(function(v,j){var i=m.start+j,xx=m.x(i),yo=m.y(v.open),yc=m.y(v.close),yh=m.y(v.high),yl=m.y(v.low),col=v.close>=v.open?"#26a69a":"#ef5350";x.strokeStyle=col;x.fillStyle=col;x.beginPath();x.moveTo(xx,yh);x.lineTo(xx,yl);x.stroke();x.fillRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(1,Math.abs(yc-yo)))});
  function obLines(a,col){a.forEach(function(o){var y=m.y(o.avg);if(y<p.t||y>p.b)return;var x1=o.origin<m.start?p.l:Math.max(p.l,m.x(o.origin));x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();x.moveTo(x1,y);x.lineTo(p.r,y);x.stroke();x.fillStyle=col;x.fillRect(p.r+3,y-9,98,18);x.fillStyle="#fff";x.fillText(fmt(o.avg),p.r+8,y+3)})}
