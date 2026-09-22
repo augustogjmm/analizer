@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analizer — Order Blocks</title>
+<style>
+:root{color-scheme:dark;--bg:#070b11;--panel:#101722;--line:#202b3a;--text:#e7edf6;--muted:#8b98ab;--bull:#169400;--bear:#ff1100}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,Segoe UI,sans-serif;padding:18px}
+main{max-width:1500px;margin:auto}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+h1{margin:3px 0;font-size:27px}.sub,.muted{color:var(--muted)}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;padding:12px;align-items:end}.field{display:flex;flex-direction:column;gap:5px;min-width:150px}
+label{font-size:11px;color:var(--muted);font-weight:700}input,select,button{height:37px;border-radius:8px;border:1px solid #2b394c;background:#0b111a;color:var(--text);padding:0 10px}
+#pair{min-width:190px;text-transform:uppercase}.check{display:flex;align-items:center;gap:7px;height:37px;color:#bec9d8}.check input{height:auto}
+button{cursor:pointer;background:#1a2636;font-weight:700}.status{padding:7px 10px;border:1px solid #314054;border-radius:999px;font-size:12px}
+.status.ok{color:#8ee3a9;border-color:#1d5b34;background:#0b2415}.status.err{color:#ff9da3;border-color:#7c2b30;background:#2a1013}.status.load{color:#f1d78d;border-color:#5c4a25;background:#241d0e}
+.meta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:9px 2px;color:var(--muted);font-size:12px}
+.chartbox{height:620px;position:relative;overflow:hidden}canvas{width:100%;height:100%;display:block}.tip{position:absolute;left:12px;top:12px;background:#080d14e8;border:1px solid #263448;border-radius:7px;padding:7px 9px;display:none;font:11px monospace}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.tbl{overflow:auto}.tbl h2{font-size:14px;margin:0;padding:11px 12px;border-bottom:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px 10px;border-bottom:1px solid #1a2533;text-align:left;white-space:nowrap}th{font-size:10px;color:var(--muted)}
+.bull{color:#76e883}.bear{color:#ff8179}.note{padding:11px 13px;margin-top:12px;color:#aab7c8;font-size:12px}footer{padding:12px 3px;color:#66758a;font-size:11px}
+@media(max-width:850px){body{padding:9px}.top{flex-direction:column}.grid{grid-template-columns:1fr}.chartbox{height:520px}}
+</style>
+</head>
+<body><main>
+<div class="top"><div><div class="muted">VALIDACIÓN CONTRA TRADINGVIEW</div><h1>Analizer · Order Block Detector <span id="tfTitle">1H</span></h1><div class="sub">Binance Spot · lógica compatible con Order Block Detector [LuxAlgo]</div></div><div id="status" class="status load">Inicializando…</div></div>
+
+<section class="card controls">
+<div class="field"><label>Par</label><input id="pair" value="BTCUSDT" placeholder="BTCUSDT"><span class="muted" style="font-size:10px">Acepta BTCUSDT, BTC/USDT o BTC-USDT</span></div>
+<div class="field"><label>Temporalidad</label><select id="tf"><option>5m</option><option>15m</option><option>30m</option><option value="1h" selected>1H</option><option value="4h">4H</option><option value="1d">D</option><option value="1w">W</option></select></div>
+<div class="field"><label>Historial</label><input value="Máximo disponible" readonly><span id="progress" class="muted" style="font-size:10px">Desde la primera vela disponible</span></div>
+<div class="field"><label>Velas visibles</label><select id="visible"><option>120</option><option selected>240</option><option>480</option><option>1000</option></select></div>
+<label class="check"><input id="autoscale" type="checkbox" checked> Incluir OB en autoescala</label>
+<button id="load">Cargar / actualizar</button>
+</section>
+
+<div class="meta"><div>Pivot <b>5</b> · Bullish OB <b>3</b> · Bearish OB <b>3</b> · Mitigation <b>Wick / Mecha</b></div><div id="source">—</div></div>
+
+<section class="card chartbox"><canvas id="chart"></canvas><div id="tip" class="tip"></div></section>
+
+<div class="grid">
+<section class="card tbl"><h2 class="bull">Bullish OB activos</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bullRows"></tbody></table></section>
+<section class="card tbl"><h2 class="bear">Bearish OB activos</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bearRows"></tbody></table></section>
+</div>
+
+<div class="card note">Para comparar 1:1 usá en TradingView el mismo símbolo de <b>Binance Spot</b>, la misma temporalidad y configuración 5 / 3 / 3 / Wick. Los OB se confirman 5 velas después de su vela de origen.</div>
+<footer>Analizer v1.1.0 · CC BY-NC-SA 4.0 · Adaptación no comercial del script open-source de LuxAlgo.</footer>
+</main>
+<script>
+(function(){
+"use strict";
+var BASES=["https://api.binance.com","https://api1.binance.com","https://api2.binance.com","https://data-api.binance.vision"];
+var TF={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000,"1d":86400000,"1w":604800000};
+var S={candles:[],bulls:[],bears:[],precision:2,visible:240,hover:null,abort:null};
+var E={pair:q("pair"),tf:q("tf"),status:q("status"),progress:q("progress"),source:q("source"),visible:q("visible"),autoscale:q("autoscale"),load:q("load"),canvas:q("chart"),tip:q("tip"),bull:q("bullRows"),bear:q("bearRows"),tfTitle:q("tfTitle")};
+function q(id){return document.getElementById(id)}
+function norm(s){return String(s||"").toUpperCase().trim().replace(/[\s\/_\-:.]+/g,"")}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function stat(t,k){E.status.textContent=t;E.status.className="status "+(k||"")}
+async function api(path,signal){
+ var last;
+ for(var b=0;b<BASES.length;b++){
+  try{
+   var r=await fetch(BASES[b]+path,{cache:"no-store",signal:signal});
+   var j=null;try{j=await r.json()}catch(_){}
+   if(!r.ok){var er=new Error((j&&j.msg)||("HTTP "+r.status));er.status=r.status;er.code=j&&j.code;if(r.status===400||r.status===404)er.terminal=true;throw er}
+   return j
+  }catch(e){if(e.name==="AbortError")throw e;if(e.terminal)throw e;last=e}
+ }
+ throw last||new Error("Sin conexión con Binance")
+}
+function tickPrec(v){var s=Number(v).toFixed(12).replace(/0+$/,""),p=s.indexOf(".");return p<0?0:s.length-p-1}
+async function symbolInfo(sym,signal){
+ try{
+  var j=await api("/api/v3/exchangeInfo?symbol="+encodeURIComponent(sym),signal),x=j&&j.symbols&&j.symbols[0];
+  if(!x||x.symbol!==sym)throw invalid(sym);
+  var f=x.filters&&x.filters.find(function(z){return z.filterType==="PRICE_FILTER"}),tick=f?Number(f.tickSize):.01;
+  return {precision:tickPrec(tick)}
+ }catch(e){if(e.name==="AbortError")throw e;if(e.code===-1121||e.status===400||e.invalid)throw invalid(sym);throw e}
+}
+function invalid(sym){var e=new Error("Par inexistente: "+sym);e.invalid=true;return e}
+function candle(r){return {time:+r[0],open:+r[1],high:+r[2],low:+r[3],close:+r[4],volume:+r[5]}}
+async function history(sym,tf,signal){
+ var first=await api("/api/v3/klines?symbol="+sym+"&interval="+tf+"&startTime=0&limit=1",signal);
+ if(!first||!first.length)return [];
+ var start=+first[0][0],now=Date.now(),step=TF[tf]*1000,starts=[];
+ for(var t=start;t<=now;t+=step)starts.push(t);
+ var all=[],batch=4;
+ for(var i=0;i<starts.length;i+=batch){
+  var ps=starts.slice(i,i+batch).map(function(st){return api("/api/v3/klines?symbol="+sym+"&interval="+tf+"&startTime="+st+"&limit=1000",signal)});
+  var rs=await Promise.all(ps);
+  rs.forEach(function(rows){(rows||[]).forEach(function(r){all.push(candle(r))})});
+  E.progress.textContent=all.length.toLocaleString("es-AR")+" velas · "+Math.min(100,Math.round((i+rs.length)/starts.length*100))+"%";
+  if(i+batch<starts.length)await sleep(80)
+ }
+ var m=new Map();all.forEach(function(c){m.set(c.time,c)});
+ return Array.from(m.values()).sort(function(a,b){return a.time-b.time})
+}
+function max(a,s,e,k){var v=-Infinity;for(var i=s;i<=e;i++)if(a[i][k]>v)v=a[i][k];return v}
+function min(a,s,e,k){var v=Infinity;for(var i=s;i<=e;i++)if(a[i][k]<v)v=a[i][k];return v}
+function pivot(a,confirm,n){
+ var p=confirm-n,l=p-n;if(l<0)return false;var v=a[p].volume;
+ for(var i=l;i<=confirm;i++)if(i!==p&&!(v>a[i].volume))return false;
+ return true
+}
+function mitigate(arr,target,bull){for(var i=arr.length-1;i>=0;i--){if(bull?target<arr[i].bottom:target>arr[i].top)arr.splice(i,1)}}
+function blocks(a){
+ var n=5,bulls=[],bears=[],os=0;
+ for(var i=n;i<a.length;i++){
+  var rs=i-n+1,up=max(a,rs,i,"high"),lo=min(a,rs,i,"low"),p=i-n;
+  if(a[p].high>up)os=0;else if(a[p].low<lo)os=1;
+  if(i>=2*n&&pivot(a,i,n)){
+   var c=a[p],h=(c.high+c.low)/2;
+   if(os===1){var bt=c.low,tp=h;bulls.unshift({origin:p,confirm:i,originTime:c.time,confirmTime:a[i].time,top:tp,bottom:bt,avg:(tp+bt)/2})}
+   else{var tp2=c.high,bt2=h;bears.unshift({origin:p,confirm:i,originTime:c.time,confirmTime:a[i].time,top:tp2,bottom:bt2,avg:(tp2+bt2)/2})}
+  }
+  mitigate(bulls,lo,true);mitigate(bears,up,false)
+ }
+ S.bulls=bulls.slice(0,3);S.bears=bears.slice(0,3)
+}
+function fmt(v){return Number(v).toLocaleString("en-US",{minimumFractionDigits:S.precision,maximumFractionDigits:S.precision})}
+function dt(ms){return new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(ms))}
+function tables(){
+ function rows(a,cls){if(!a.length)return '<tr><td colspan="4" class="muted">Sin OB activos</td></tr>';return a.map(function(o){return '<tr><td class="'+cls+'"><b>'+fmt(o.avg)+'</b></td><td>'+fmt(o.bottom)+' — '+fmt(o.top)+'</td><td>'+dt(o.originTime)+'</td><td>'+dt(o.confirmTime)+'</td></tr>'}).join("")}
+ E.bull.innerHTML=rows(S.bulls,"bull");E.bear.innerHTML=rows(S.bears,"bear")
+}
+async function load(){
+ var sym=norm(E.pair.value),tf=E.tf.value;if(!sym){stat("Ingresá un par","err");return}E.pair.value=sym;
+ if(S.abort)S.abort.abort();S.abort=new AbortController();E.load.disabled=true;stat("Validando "+sym+"…","load");E.progress.textContent="Buscando primera vela…";
+ try{
+  var inf=await symbolInfo(sym,S.abort.signal);S.precision=inf.precision;stat("Descargando máximo historial…","load");
+  S.candles=await history(sym,tf,S.abort.signal);blocks(S.candles);tables();E.source.textContent="BINANCE:"+sym+" · "+E.tf.options[E.tf.selectedIndex].text+" · "+S.candles.length.toLocaleString("es-AR")+" velas";
+  E.progress.textContent=S.candles.length.toLocaleString("es-AR")+" velas desde "+(S.candles.length?dt(S.candles[0].time):"—");stat("OK · cálculo completado","ok");draw()
+ }catch(e){if(e.name==="AbortError")return;S.candles=[];S.bulls=[];S.bears=[];tables();draw();stat(e.invalid?"Par inexistente: "+sym:"Error: "+e.message,"err");E.source.textContent=e.invalid?"El par no existe en Binance Spot":"Error de datos"}
+ finally{E.load.disabled=false;S.abort=null}
+}
+function model(w,h){
+ var p={l:12,r:w-105,t:16,b:h-33};p.w=p.r-p.l;p.h=p.b-p.t;
+ var count=Math.min(S.visible,S.candles.length),start=Math.max(0,S.candles.length-count),vis=S.candles.slice(start),mn=Infinity,mx=-Infinity;
+ vis.forEach(function(c){mn=Math.min(mn,c.low);mx=Math.max(mx,c.high)});
+ if(E.autoscale.checked)[].concat(S.bulls,S.bears).forEach(function(o){mn=Math.min(mn,o.bottom,o.avg,o.top);mx=Math.max(mx,o.bottom,o.avg,o.top)});
+ if(!isFinite(mn)||!isFinite(mx)){mn=0;mx=1}var span=mx-mn||Math.max(1,Math.abs(mx)*.01);mn-=span*.06;mx+=span*.06;
+ var step=p.w/Math.max(1,count);return {p:p,start:start,vis:vis,mn:mn,mx:mx,step:step,x:function(i){return p.l+(i-start+.5)*step},y:function(v){return p.t+(mx-v)/(mx-mn)*p.h}}
+}
+function draw(){
+ var c=E.canvas,rect=c.getBoundingClientRect(),d=Math.max(1,devicePixelRatio||1);c.width=Math.round(rect.width*d);c.height=Math.round(rect.height*d);
+ var x=c.getContext("2d");x.setTransform(d,0,0,d,0,0);x.fillStyle="#0b1018";x.fillRect(0,0,rect.width,rect.height);
+ if(!S.candles.length){x.fillStyle="#8b98ab";x.fillText("Sin datos",20,28);return}
+ var m=model(rect.width,rect.height),p=m.p;
+ var grids=7,gs=(m.mx-m.mn)/grids;
+ x.font="11px system-ui";for(var g=0;g<=grids;g++){var price=m.mn+g*gs,y=m.y(price);x.strokeStyle="#1c2634";x.beginPath();x.moveTo(p.l,y);x.lineTo(p.r,y);x.stroke();x.fillStyle="#7f8da3";x.fillText(fmt(price),p.r+7,y+3)}
+ var bw=Math.max(1,Math.min(9,m.step*.68));
+ m.vis.forEach(function(v,j){var i=m.start+j,xx=m.x(i),yo=m.y(v.open),yc=m.y(v.close),yh=m.y(v.high),yl=m.y(v.low),col=v.close>=v.open?"#26a69a":"#ef5350";x.strokeStyle=col;x.fillStyle=col;x.beginPath();x.moveTo(xx,yh);x.lineTo(xx,yl);x.stroke();x.fillRect(xx-bw/2,Math.min(yo,yc),bw,Math.max(1,Math.abs(yc-yo)))});
+ function obLines(a,col){a.forEach(function(o){var y=m.y(o.avg);if(y<p.t||y>p.b)return;var x1=o.origin<m.start?p.l:Math.max(p.l,m.x(o.origin));x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();x.moveTo(x1,y);x.lineTo(p.r,y);x.stroke();x.fillStyle=col;x.fillRect(p.r+3,y-9,98,18);x.fillStyle="#fff";x.fillText(fmt(o.avg),p.r+8,y+3)})}
+ obLines(S.bulls,"#169400");obLines(S.bears,"#ff1100")
+}
+E.load.onclick=load;E.tf.onchange=function(){E.tfTitle.textContent=E.tf.options[E.tf.selectedIndex].text;load()};E.visible.onchange=function(){S.visible=+E.visible.value;draw()};E.autoscale.onchange=draw;
+E.pair.onkeydown=function(e){if(e.key==="Enter")load()};E.pair.onblur=function(){var n=norm(E.pair.value);if(n)E.pair.value=n};window.addEventListener("resize",draw);
+load();
+})();
+</script></body></html>
