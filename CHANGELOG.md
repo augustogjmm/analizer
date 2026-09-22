@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-09-22
+
+- Se agregan EMA 10, EMA 55 y EMA 200 sobre el gráfico de precio.
+- Se agrega panel de volumen alineado con las velas visibles.
+- Se agrega MACD estándar 12/26/9 con línea MACD, señal e histograma.
+- Se incorpora una franja de indicadores con los valores actuales.
+- Precio, volumen y MACD comparten el mismo eje temporal y se adaptan al resizer.
+- Se mantiene sin cambios la lógica del motor de Order Blocks.
+
 ## 1.1.3 — 2026-09-22
 
 - Mejora de contraste y legibilidad de textos secundarios sobre fondo negro.

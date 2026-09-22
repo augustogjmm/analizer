@@ -1,0 +1,25 @@
+{
+  "name": "analizer",
+  "version": "1.2.0",
+  "date": "2026-09-22",
+  "dataSource": "Binance Spot",
+  "orderBlock": {
+    "volumePivotLength": 5,
+    "bullishOB": 3,
+    "bearishOB": 3,
+    "mitigation": "Wick"
+  },
+  "indicators": {
+    "ema": [
+      10,
+      55,
+      200
+    ],
+    "macd": {
+      "fast": 12,
+      "slow": 26,
+      "signal": 9
+    },
+    "volume": true
+  }
+}
