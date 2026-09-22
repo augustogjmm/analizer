@@ -94,6 +94,8 @@ h1{
 .status.ok{color:#8df0b9}.status.ok:before{background:var(--green)}
 .status.err{color:#ff9da4}.status.err:before{background:var(--red)}
 .status.load{color:#c8b9ff}.status.load:before{background:var(--iris);animation:pulse 1s ease-in-out infinite}
+.status.live{color:#8df0b9;background:#07110c}
+.status.live:before{background:var(--green);box-shadow:0 0 0 4px rgba(54,213,138,.10);animation:livePulse 1.6s ease-in-out infinite}
 .controls{
   display:grid;
   grid-template-columns:minmax(250px,1.45fr) minmax(150px,.72fr) minmax(150px,.72fr) 150px;
@@ -268,6 +270,7 @@ footer{
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes sweep{from{transform:translateX(-125%)}to{transform:translateX(340%)}}
 @keyframes pulse{50%{opacity:.35}}
+@keyframes livePulse{50%{opacity:.45;transform:scale(.82)}}
 @media(max-width:980px){
   body{padding:20px}
   .controls{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
@@ -314,14 +317,14 @@ footer{
 <section class="tbl"><h2 class="bear">Entradas Short</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bearRows"></tbody></table></section>
 </div>
 
-<footer>Analizer v1.2.0</footer>
+<footer>Analizer v1.2.1 · Live</footer>
 </main>
 <script>
 (function(){
 "use strict";
 var BASES=["https://api.binance.com","https://api1.binance.com","https://api2.binance.com","https://data-api.binance.vision"];
 var TF={"5m":300000,"15m":900000,"30m":1800000,"1h":3600000,"4h":14400000,"1d":86400000,"1w":604800000};
-var S={candles:[],bulls:[],bears:[],ema10:[],ema55:[],ema200:[],macd:[],signal:[],hist:[],precision:2,visible:240,hover:null,abort:null};
+var S={candles:[],bulls:[],bears:[],ema10:[],ema55:[],ema200:[],macd:[],signal:[],hist:[],precision:2,visible:240,hover:null,abort:null,ws:null,wsToken:0,wsReconnect:null,liveLastCalc:0,liveLastPaint:0,liveSymbol:"",liveTf:""};
 var E={pair:q("pair"),tf:q("tf"),status:q("status"),progress:q("progress"),source:q("source"),visible:q("visible"),load:q("load"),canvas:q("chart"),tip:q("tip"),bull:q("bullRows"),bear:q("bearRows"),tfTitle:q("tfTitle"),loadingOverlay:q("loadingOverlay"),loadingText:q("loadingText"),ema10Now:q("ema10Now"),ema55Now:q("ema55Now"),ema200Now:q("ema200Now"),macdNow:q("macdNow"),signalNow:q("signalNow"),volumeNow:q("volumeNow")};
 function q(id){return document.getElementById(id)}
 function norm(s){return String(s||"").toUpperCase().trim().replace(/[\s\/_\-:.]+/g,"")}
@@ -423,14 +426,70 @@ function indicatorValues(){
  E.macdNow.textContent=p(S.macd);E.signalNow.textContent=p(S.signal);
  E.volumeNow.textContent=i>=0?compact(S.candles[i].volume):"—"
 }
+function liveTime(){
+ return new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(new Date())
+}
+function stopLive(){
+ S.wsToken++;
+ if(S.wsReconnect){clearTimeout(S.wsReconnect);S.wsReconnect=null}
+ if(S.ws){
+  try{S.ws.onopen=null;S.ws.onmessage=null;S.ws.onerror=null;S.ws.onclose=null;S.ws.close()}catch(_){}
+  S.ws=null
+ }
+}
+function startLive(sym,tf){
+ stopLive();
+ var token=S.wsToken,stream=sym.toLowerCase()+"@kline_"+tf;
+ S.liveSymbol=sym;S.liveTf=tf;S.liveLastCalc=0;S.liveLastPaint=0;
+ function connect(){
+  if(token!==S.wsToken)return;
+  stat("Conectando en vivo…","load");
+  var ws;
+  try{ws=new WebSocket("wss://stream.binance.com:9443/ws/"+stream)}catch(e){
+   S.wsReconnect=setTimeout(connect,2500);return
+  }
+  S.ws=ws;
+  ws.onopen=function(){
+   if(token!==S.wsToken)return;
+   stat("EN VIVO · "+sym,"live");
+   E.source.textContent="Binance LIVE · "+sym+" · "+E.tf.options[E.tf.selectedIndex].text+" · actualizado "+liveTime()
+  };
+  ws.onmessage=function(ev){
+   if(token!==S.wsToken)return;
+   var j;try{j=JSON.parse(ev.data)}catch(_){return}
+   var k=j&&j.k;if(!k)return;
+   var cur={time:+k.t,open:+k.o,high:+k.h,low:+k.l,close:+k.c,volume:+k.v};
+   var last=S.candles[S.candles.length-1];
+   if(last&&last.time===cur.time)S.candles[S.candles.length-1]=cur;
+   else if(!last||cur.time>last.time)S.candles.push(cur);
+   else{
+    for(var z=S.candles.length-1;z>=0&&z>S.candles.length-5;z--){if(S.candles[z].time===cur.time){S.candles[z]=cur;break}}
+   }
+   var now=Date.now(),closed=!!k.x;
+   if(closed||now-S.liveLastCalc>=1000){
+    blocks(S.candles);indicators();tables();S.liveLastCalc=now
+   }
+   if(closed||now-S.liveLastPaint>=250){scheduleDraw();S.liveLastPaint=now}
+   E.source.textContent="Binance LIVE · "+sym+" · "+E.tf.options[E.tf.selectedIndex].text+" · actualizado "+liveTime()
+  };
+  ws.onerror=function(){try{ws.close()}catch(_){}};
+  ws.onclose=function(){
+   if(token!==S.wsToken)return;
+   stat("Reconectando en vivo…","load");
+   S.wsReconnect=setTimeout(connect,2000)
+  }
+ }
+ connect()
+}
 async function load(){
  var sym=norm(E.pair.value),tf=E.tf.value;if(!sym){stat("Ingresá un par","err");return}E.pair.value=sym;
+ stopLive();
  if(S.abort)S.abort.abort();S.abort=new AbortController();E.load.disabled=true;stat("Analizando "+sym+"…","load");E.progress.textContent="Buscando primera vela…";busy(true,"Validando "+sym+" en Binance Spot…");
  try{
   var inf=await symbolInfo(sym,S.abort.signal);S.precision=inf.precision;stat("Procesando datos…","load");busy(true,"Descargando y procesando historial…");
   S.candles=await history(sym,tf,S.abort.signal);blocks(S.candles);indicators();tables();E.source.textContent="BINANCE:"+sym+" · "+E.tf.options[E.tf.selectedIndex].text+" · "+S.candles.length.toLocaleString("es-AR")+" velas";
-  E.progress.textContent=S.candles.length.toLocaleString("es-AR")+" velas desde "+(S.candles.length?dt(S.candles[0].time):"—");stat("OK · cálculo completado","ok");draw()
- }catch(e){if(e.name==="AbortError")return;S.candles=[];S.bulls=[];S.bears=[];S.ema10=[];S.ema55=[];S.ema200=[];S.macd=[];S.signal=[];S.hist=[];indicatorValues();tables();draw();stat(e.invalid?"Par inexistente: "+sym:"Error: "+e.message,"err");E.source.textContent=e.invalid?"El par no existe en Binance Spot":"Error de datos"}
+  E.progress.textContent=S.candles.length.toLocaleString("es-AR")+" velas desde "+(S.candles.length?dt(S.candles[0].time):"—");stat("Datos cargados · conectando live","load");draw();startLive(sym,tf)
+ }catch(e){if(e.name==="AbortError")return;stopLive();S.candles=[];S.bulls=[];S.bears=[];S.ema10=[];S.ema55=[];S.ema200=[];S.macd=[];S.signal=[];S.hist=[];indicatorValues();tables();draw();stat(e.invalid?"Par inexistente: "+sym:"Error: "+e.message,"err");E.source.textContent=e.invalid?"El par no existe en Binance Spot":"Error de datos"}
  finally{E.load.disabled=false;S.abort=null;busy(false)}
 }
 function model(w,h){
