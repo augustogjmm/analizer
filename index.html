@@ -243,6 +243,13 @@ th{
 td{color:#d2d2d2}
 tbody tr+tr td{border-top:1px solid #101010}
 .bull{color:#65e7a5}.bear{color:#ff858d}.muted{color:#777}
+.level{color:#fff;font-weight:600}
+.delta{font-weight:600}
+.delta.up{color:#ff9aa1}
+.delta.down{color:#72e7aa}
+.delta small{display:block;margin-top:3px;color:#777;font-size:9px;font-weight:400;text-transform:uppercase;letter-spacing:.04em}
+.ob-state{display:inline-flex;align-items:center;gap:6px;color:#8df0b9;font-size:10px;font-weight:600;letter-spacing:.05em}
+.ob-state:before{content:"";width:6px;height:6px;border-radius:50%;background:#36d58a}
 footer{
   padding:36px 0 10px;
   color:#7f7f7f;
@@ -318,11 +325,11 @@ footer{
 <section class="chartbox"><canvas id="chart"></canvas><div id="tip" class="tip"></div><div id="loadingOverlay" class="loading-overlay show"><div class="loading-box"><div class="spinner"></div><div class="loading-title">Analizando mercado</div><div id="loadingText" class="loading-text">Preparando datos…</div><div class="pulsebar"></div></div></div></section>
 
 <div class="grid">
-<section class="tbl"><h2 class="bull">Entradas Long</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bullRows"></tbody></table></section>
-<section class="tbl"><h2 class="bear">Entradas Short</h2><table><thead><tr><th>Precio</th><th>Zona</th><th>Origen</th><th>Confirmado</th></tr></thead><tbody id="bearRows"></tbody></table></section>
+<section class="tbl"><h2 class="bull">Entradas Long</h2><table><thead><tr><th>Nivel</th><th>Precio</th><th>% tramo</th><th>Zona</th><th>Vela origen</th><th>Validación +5</th><th>Edad</th><th>Estado</th></tr></thead><tbody id="bullRows"></tbody></table></section>
+<section class="tbl"><h2 class="bear">Entradas Short</h2><table><thead><tr><th>Nivel</th><th>Precio</th><th>% tramo</th><th>Zona</th><th>Vela origen</th><th>Validación +5</th><th>Edad</th><th>Estado</th></tr></thead><tbody id="bearRows"></tbody></table></section>
 </div>
 
-<footer>Analizer v1.3.0 · Interactive</footer>
+<footer>Analizer v1.3.1 · Interactive</footer>
 </main>
 <script>
 (function(){
@@ -399,9 +406,40 @@ function blocks(a){
 }
 function fmt(v){return Number(v).toLocaleString("en-US",{minimumFractionDigits:S.precision,maximumFractionDigits:S.precision})}
 function dt(ms){return new Intl.DateTimeFormat("es-AR",{timeZone:"America/Argentina/Buenos_Aires",day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(ms))}
+function age(ms){
+ var diff=Math.max(0,Date.now()-ms),mins=Math.floor(diff/60000),hrs=Math.floor(mins/60),days=Math.floor(hrs/24);
+ if(days>=1)return days+" d";
+ if(hrs>=1)return hrs+" h";
+ return Math.max(1,mins)+" min"
+}
 function tables(){
- function rows(a,cls){if(!a.length)return '<tr><td colspan="4" class="muted">Sin OB activos</td></tr>';return a.map(function(o){return '<tr><td class="'+cls+'"><b>'+fmt(o.avg)+'</b></td><td>'+fmt(o.bottom)+' — '+fmt(o.top)+'</td><td>'+dt(o.originTime)+'</td><td>'+dt(o.confirmTime)+'</td></tr>'}).join("")}
- E.bull.innerHTML=rows(S.bulls,"bull");E.bear.innerHTML=rows(S.bears,"bear")
+ var current=S.candles.length?S.candles[S.candles.length-1].close:null;
+ function rows(a,cls,kind){
+  if(!a.length)return '<tr><td colspan="8" class="muted">Sin OB activos</td></tr>';
+  var sorted=a.slice().sort(function(x,y){return kind==="long"?y.avg-x.avg:x.avg-y.avg});
+  var base=current;
+  return sorted.map(function(o,i){
+   var pct=isFinite(base)&&base!==0?(o.avg/base-1)*100:null;
+   var arrow=pct===null?"":(pct>=0?"↑":"↓");
+   var dcls=pct===null?"":(pct>=0?"up":"down");
+   var from=i===0?"desde precio":"desde "+(kind==="long"?"Long ":"Short ")+i;
+   var delta=pct===null?"—":arrow+" "+Math.abs(pct).toFixed(2)+"%";
+   var label=(kind==="long"?"Long ":"Short ")+(i+1);
+   base=o.avg;
+   return '<tr>'+
+    '<td class="level">'+label+'</td>'+
+    '<td class="'+cls+'"><b>'+fmt(o.avg)+'</b></td>'+
+    '<td class="delta '+dcls+'">'+delta+'<small>'+from+'</small></td>'+
+    '<td>'+fmt(o.bottom)+' — '+fmt(o.top)+'</td>'+
+    '<td>'+dt(o.originTime)+'</td>'+
+    '<td>'+dt(o.confirmTime)+'</td>'+
+    '<td>'+age(o.originTime)+'</td>'+
+    '<td><span class="ob-state">ACTIVO</span></td>'+
+   '</tr>'
+  }).join("")
+ }
+ E.bull.innerHTML=rows(S.bulls,"bull","long");
+ E.bear.innerHTML=rows(S.bears,"bear","short")
 }
 function ema(values,period){
  var out=[],k=2/(period+1),e=null;
