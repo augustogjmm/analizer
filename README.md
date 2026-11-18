@@ -1,3 +1,7 @@
+> **Proyecto experimental de validación visual y procesamiento de datos de mercado.** La implementación adapta lógica de un proyecto de terceros; respetar los términos de atribución y uso no comercial que figuran en [LICENSE.txt](LICENSE.txt). No constituye un producto financiero certificado.
+
+**[Portfolio ejecutivo](https://github.com/augustogjmm/Radar/blob/main/PORTFOLIO.md)**
+
 # Analizer
 
 Analizador visual de **Order Blocks** sobre Binance Spot, pensado para validar resultados contra TradingView usando como referencia la lógica open-source de **Order Block Detector [LuxAlgo]**.
