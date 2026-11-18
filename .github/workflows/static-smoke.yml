@@ -1,0 +1,26 @@
+name: Analizer static smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  html-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate standalone HTML releases
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          root = json.loads(Path('version.json').read_text(encoding='utf-8'))
+          for file in ['index.html', 'versions/v1.1.0/index.html', 'versions/v1.2.0/index.html']:
+              text = Path(file).read_text(encoding='utf-8').lower()
+              assert '<html' in text and '</html>' in text and '<script' in text, file
+          assert root['version'] == '1.2.0'
+          print('HTML release structure and version metadata present')
+          PY
+      # Source attribution, browser compatibility and behavior require separate review.
