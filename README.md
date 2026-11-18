@@ -8,7 +8,7 @@ Analizador visual de **Order Blocks** sobre Binance Spot, pensado para validar r
 
 ## Versión actual
 
-**v1.1.0**
+**v1.2.0**
 
 - Campo libre para escribir cualquier par de Binance Spot (`BTCUSDT`, `ETH/USDT`, `SOL-USDT`, etc.).
 - Validación del símbolo antes de descargar velas. Si no existe, muestra **“Par inexistente”**.
@@ -39,10 +39,13 @@ Luego abrir `http://localhost:8000`.
 
 También puede abrirse `index.html` directamente, aunque algunos navegadores o políticas de red pueden bloquear llamadas cross-origin.
 
+La versión 1.2.0 incorpora EMA 10/55/200, volumen y MACD, según el [registro de cambios](CHANGELOG.md). La implementación conserva la lógica de Order Blocks indicada en su licencia.
+
 ## Versiones
 
 - `versions/v1.0.0/` — primera prueba: BTC/ETH/SOL, 1H e historial limitado.
 - `versions/v1.1.0/` — símbolo libre, múltiples temporalidades e historial máximo disponible.
+- `versions/v1.2.0/` — indicadores EMA, volumen y MACD.
 
 La raíz del repositorio siempre contiene la versión estable más reciente.
 
